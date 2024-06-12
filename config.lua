@@ -66,36 +66,31 @@ local function registerModConfig()
 
     local settings = template:createPage({ label = "Settings" })
 
-    local toggle = settings:createCategory{paddingBottom = 10,}
-        yesNoB(toggle, "Use Players Name in Combat Log?", "showPlayerName", config)
-        yesNoB(toggle, "Enable Auto Show Mode", "autoShow", config)
+        local toggle = settings:createCategory{paddingBottom = 10,}
+            yesNoB(toggle, "Use Players Name in Combat Log?", "showPlayerName", config)
+            yesNoB(toggle, "Enable Auto Show Mode", "autoShow", config)
 
+            toggle:createSlider({
+                variable = mwse.mcm.createTableVariable{id = "autoDuration", table = config},
+                label = "Auto Show Time",
+                min = 1, max = 60, step = 1, jump = 5,
+            })
+     ---------------------------------------------------------------------------------
+
+     ---------------------------------------------------------------------------------
         settings:createSlider({
-            variable = mwse.mcm.createTableVariable{id = "autoDuration", table = config},
-            label = "Auto Show Time",
-            min = 1, max = 60, step = 1, jump = 5,
+            variable = mwse.mcm.createTableVariable{id = "alpha", table = config},
+            label = "Transparency",
+            min = 0, max = 1, step = 0.01, jump = 0.1, decimalPlaces = 2,
+            callback = alpha
         })
-    ---------------------------------------------------------------------------------
 
-    ---------------------------------------------------------------------------------
-    settings:createSlider({
-        variable = mwse.mcm.createTableVariable{id = "alpha", table = config},
-        label = "Transparency",
-        min = 0, max = 1, step = 0.01, jump = 0.1, decimalPlaces = 2,
-        callback = alpha
-    })
-
-    settings:createKeyBinder({
-        label = "Assign Keybind",
-        description = "Assign a new keybind.",
-        variable = mwse.mcm.createTableVariable{ id = "keycode", table = config },
-        allowCombinations = false,
-    })
-
-
-
-
-
+        settings:createKeyBinder({
+            label = "Assign Keybind",
+            description = "Assign a new keybind.",
+            variable = mwse.mcm.createTableVariable{ id = "keycode", table = config },
+            allowCombinations = false,
+        })
 
     template:register()
 

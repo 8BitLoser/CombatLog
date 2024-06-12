@@ -3,24 +3,30 @@ local config = require("BeefStranger.CombatLog.config")
 event.register("initialized", function()
     print("[MWSE:Combat Log] initialized")
 end)
+local function log(string,...)
+    local line = debug.getinfo(2, "l").currentline
+    local message = string.format("[CombatLog|%s] - %s", line, string)
+    mwse.log(message, ...)
+end
 ---From BeefLibrary
 ---@param menu tes3uiElement
 local function autoSize(menu)
+    log("AutoSize")
     menu.autoHeight = true
     menu.autoWidth = true
 end
 
 
-local combatLog = tes3ui.registerID("bsCombatLog2")
+
+local combatLog = tes3ui.registerID("bsCombatLog")
 local cMenu---@type tes3uiElement 
-local cheader ---@type tes3uiElement 
-local clog---@type tes3uiElement 
+local cheader ---@type tes3uiElement --The cheese
+local clog---@type tes3uiElement --The shoes
 local scroll---@type tes3uiElement
 local manual
 
 local function combatlog()
-    -- combatLog = tes3ui.registerID("bsCombatLogTEST2")
-
+    log("combatLog started")
     cMenu = tes3ui.createMenu{id = combatLog, dragFrame = true, fixedFrame = false}
         cMenu.text = "Combat Log"
         cMenu.width = 300
@@ -31,7 +37,7 @@ local function combatlog()
         cMenu:loadMenuPosition()
 
     ---Have to do this or menu will not load visibly the first time
-    if cMenu.visible == false then
+    if not cMenu.visible  then
         cMenu.width = 300
         cMenu.height = 200
         cMenu.positionX = -845
@@ -47,39 +53,41 @@ local function combatlog()
 
     cMenu:updateLayout()
 end
+
 local autoTimer---@type mwseTimer
 
 --- @param e attackHitEventData
 local function onAttackHitCallback(e)
+    log("attackHitCallback")
     ---Could be using cMenu instead of finding menu but dont feel like updating it all
     local menu = tes3ui.findMenu(combatLog)
-    local attacker = e.reference.object.name
-    local damage = e.mobile.actionData.physicalDamage
+    local attacker = e.reference and e.reference.object and e.reference.object.name or "Unknown"
+    local damage = e.mobile and e.mobile.actionData and e.mobile.actionData.physicalDamage or 0
     local isPlayer = e.reference == tes3.player
     local isTarget = e.targetReference ~= nil
 
     if config.autoShow and not manual then
-        -- mwse.log("autoShow")
+        log("autoShow")
         if cMenu then
-            -- mwse.log("Making menu visible")
+            log("Making menu visible")
             cMenu.visible = true
         else
-            -- mwse.log("creating log")
+            log("creating log")
             combatlog()
         end
 
         if autoTimer and autoTimer.state ~= 2 then
-            -- mwse.log("resetting timer")
+            log("resetting timer")
             autoTimer:reset()
         else
-            -- mwse.log("timer start %ss", config.autoDuration)
+            log("timer start %ss", config.autoDuration)
             autoTimer = timer.start {
                 duration = config.autoDuration,
                 callback = function(e)
-                    -- mwse.log("timer end")
+                    log("timer end")
                     -- local menu = tes3ui.findMenu(combatLog)
-                    if cMenu and cMenu.visible then
-                        -- mwse.log("hiding menu")
+                    if cMenu and cMenu.visible and not manual then
+                        log("hiding menu")
                         cMenu.visible = false
                     end
                 end
@@ -88,7 +96,9 @@ local function onAttackHitCallback(e)
     end
 
     if menu then
+        log("menu found starting update")
         if damage <= 0 and isTarget then
+            log("Missed:showing miss text")
             local missedText = ("%s Missed"):format(attacker)
 
             if isPlayer then
@@ -103,6 +113,7 @@ local function onAttackHitCallback(e)
                 missedlabel.color = { 0.38, 0.38, 0.38 }
             end
             ---Update scrollbar and move to the bottom
+            log("Missed:Updating")
             menu:updateLayout()
             scroll.widget.positionY = scroll.widget.positionY + 25
             scroll.widget:contentsChanged()
@@ -120,18 +131,21 @@ local function onAttackHitCallback(e)
             elseif not isPlayer then
                 hitlabel.color = { 0.941, 0.38, 0.38 }
             end
-
+            log("Hit:Updating")
+            log("Menu - %s", menu)
             menu:updateLayout()
             scroll.widget.positionY = scroll.widget.positionY + 25
             scroll.widget:contentsChanged()
+            log("Hit:Update Finished")
         end
         ---Only save 100 messages
         if #clog.children >= 100 then
+            log("Log Full")
             clog.children[1]:destroy()
             menu:updateLayout()
             scroll.widget:contentsChanged()
         end
-        menu:saveMenuPosition()
+        -- menu:saveMenuPosition()
     end
 end
 event.register(tes3.event.attackHit, onAttackHitCallback)
@@ -141,7 +155,7 @@ event.register("keyUp", function(e)
     if not tes3.onMainMenu() and e.keyCode == config.keycode.keyCode and tes3.isCharGenFinished() then
         if tes3ui.menuMode() then return end
 
-        if config.autoShow then
+        if config.autoShow and cMenu then
             if manual then
                 manual = false
                 tes3.messageBox("CombatLog Manual Override %s", manual or "Disabled")
@@ -165,6 +179,7 @@ end)
 
 local showMenu = "combatLog:showMenu"
 event.register(showMenu, function ()
+    log("showMenu event")
     local menu = tes3ui.findMenu(combatLog)
     if menu then
         menu.width = 300
