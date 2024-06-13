@@ -1,7 +1,7 @@
 local config = require("BeefStranger.CombatLog.config")
 
 event.register("initialized", function()
-    print("[MWSE:Combat Log] initialized")
+    print("[MWSE:Combat -- log] initialized")
 end)
 
 local function log(string,...)
@@ -13,7 +13,7 @@ end
 ---From BeefLibrary
 ---@param menu tes3uiElement
 local function autoSize(menu)
-    log("AutoSize")
+    -- log("AutoSize")
     menu.autoHeight = true
     menu.autoWidth = true
 end
@@ -26,9 +26,9 @@ local scroll---@type tes3uiElement
 local manual
 
 local function combatlog()
-    log("combatLog started")
+    -- log("combatLog started")
     cMenu = tes3ui.createMenu{id = combatLog, dragFrame = true, fixedFrame = false}
-        cMenu.text = "Combat Log"
+        cMenu.text = "Combat -- log"
         cMenu.width = 300
         cMenu.height = 200
         cMenu.positionX = -845
@@ -56,15 +56,12 @@ end
 local function getMenu()
     return tes3ui.findMenu(combatLog)
 end
-local function update()
-    cMenu:updateLayout()
-end
 
 local autoTimer---@type mwseTimer
 
 --- @param e attackHitEventData
 local function onAttackHitCallback(e)
-    log("attackHitCallback")
+    -- log("attackHitCallback")
     ---Could be using cMenu instead of finding menu but dont feel like updating it all
     ---WRONG ^^^ cMenu gets replaced with MenuMulti_bottom_row_right on reload, and breaks the mod/crashes
     local menu = getMenu()
@@ -74,28 +71,28 @@ local function onAttackHitCallback(e)
     local isTarget = e.targetReference ~= nil
 
     if config.autoShow and not manual and isTarget then
-        log("autoShow")
-        if cMenu then
-            log("Making menu visible")
-            cMenu.visible = true
+        -- log("autoShow")
+        if menu then
+            -- log("Making menu visible")
+            menu.visible = true
         else
-            log("creating log")
+            -- log("creating -- log")
             combatlog()
         end
 
         if autoTimer and autoTimer.state ~= 2 then
-            log("resetting timer")
+            -- log("resetting timer")
             autoTimer:reset()
         else
-            log("timer start %ss", config.autoDuration)
+            -- log("timer start %ss", config.autoDuration)
             autoTimer = timer.start {
                 duration = config.autoDuration,
                 callback = function(e)
-                    log("timer end")
+                    -- log("timer end")
                     -- local menu = tes3ui.findMenu(combatLog)
-                    if cMenu and cMenu.visible and not manual then
-                        log("hiding menu")
-                        cMenu.visible = false
+                    if menu and menu.visible and not manual then
+                        -- log("hiding menu")
+                        menu.visible = false
                     end
                 end
             }
@@ -103,9 +100,9 @@ local function onAttackHitCallback(e)
     end
 
     if menu then
-        log("menu found starting update")
+        -- log("menu found starting update")
         if damage <= 0 and isTarget then
-            log("Missed:showing miss text")
+            -- log("Missed:showing miss text")
             local missedText = ("%s Missed"):format(attacker)
 
             if isPlayer then
@@ -120,7 +117,7 @@ local function onAttackHitCallback(e)
                 missedlabel.color = { 0.38, 0.38, 0.38 }
             end
             ---Update scrollbar and move to the bottom
-            log("Missed:Updating")
+            -- log("Missed:Updating")
             menu:updateLayout()
             scroll.widget.positionY = scroll.widget.positionY + 25
             scroll.widget:contentsChanged()
@@ -138,85 +135,41 @@ local function onAttackHitCallback(e)
             elseif not isPlayer then
                 hitlabel.color = { 0.941, 0.38, 0.38 }
             end
-            log("Hit:Updating")
-            log("Menu - %s", menu)
+            -- log("Hit:Updating")
+            -- log("Menu - %s", menu)
             menu:updateLayout()
             scroll.widget.positionY = scroll.widget.positionY + 25
             scroll.widget:contentsChanged()
-            log("Hit:Update Finished")
+            -- log("Hit:Update Finished")
         end
         ---Only save 100 messages
         if #clog.children >= 100 then
-            log("Log Full")
+            -- log("-- log Full")
             clog.children[1]:destroy()
             menu:updateLayout()
             scroll.widget:contentsChanged()
         end
-        log("End of attackCallback")
+        -- log("End of attackCallback")
         menu:saveMenuPosition()
     end
 end
 event.register(tes3.event.attackHit, onAttackHitCallback)
 
-
---[[ event.register("keyUp", function(e)
-    if not tes3.onMainMenu() and e.keyCode == config.keycode.keyCode and tes3.isCharGenFinished() then
-        if tes3ui.menuMode() then return end
-
-        if config.autoShow and cMenu then
-            if manual then
-                log("manual true | vis %s", cMenu.visible)
-                manual = false
-                tes3.messageBox("CombatLog Manual Override %s", manual or "Disabled")
-                cMenu.visible = false
-            else
-                log("manual nil or false | vis %s", cMenu.visible)
-                manual = true
-                tes3.messageBox("CombatLog Manual Override %s", manual and "Enabled")
-                cMenu.visible = true
-            end
-        else
-            if cMenu then
-                ---Toggle visible
-                log("cMenu found toggle visiblity|current %s", cMenu.visible)
-                cMenu.visible = not cMenu.visible
-                ---Update just incase, probably not needed
-                cMenu:updateLayout()
-            else
-                combatlog()
-                if config.autoShow then
-                    cMenu.visible = false
-                    cMenu:updateLayout()
-                end
-            end
-        end
-
-        if tes3.worldController.inputController:isAltDown() then
-            tes3.createReference({ --Spawn a skeleton on the player
-            object = "skeleton",
-            position = tes3.player.position,
-            orientation = tes3vector3.new(0, 0, 0.67),
-            cell = tes3.player.cell
-        })
-        end
-    end
-end) ]]
-
 ---@param e keyUpEventData
 local function onKeyUp(e)
     if not tes3.onMainMenu() and e.keyCode == config.keycode.keyCode and tes3.isCharGenFinished() then
         if tes3ui.menuMode() then return end
-        log("getMenu %s | cMenu %s", getMenu(), cMenu)
+        -- log("getMenu %s | cMenu %s", getMenu(), cMenu)
         local menu = getMenu()
 
         if config.autoShow and menu then
             if manual then
-                log("manual true | vis %s", menu.visible)
+                -- log("manual true | vis %s", menu.visible)
                 manual = false
                 tes3.messageBox("CombatLog Manual Override %s", manual or "Disabled")
                 menu.visible = false
             else
-                log("manual nil or false | vis %s", menu.visible)
+                -- log("manual nil or false | vis %s", menu.visible)
                 manual = true
                 tes3.messageBox("CombatLog Manual Override %s", manual and "Enabled")
                 menu.visible = true
@@ -224,7 +177,7 @@ local function onKeyUp(e)
         else
             if menu then
                 ---Toggle visible
-                log("menu found toggle visiblity|current %s", menu.visible)
+                -- log("menu found toggle visiblity|current %s", menu.visible)
                 menu.visible = not menu.visible
                 ---Update just incase, probably not needed
                 menu:updateLayout()
@@ -243,22 +196,11 @@ local function onKeyUp(e)
         end
     end
 end
-
 event.register(tes3.event.keyUp, onKeyUp)
-
--- event.register(tes3.event.loaded, function (e)
---     log("event loaded %s", event.isRegistered(tes3.event.keyUp, onKeyUp))
---     if event.isRegistered(tes3.event.keyUp, onKeyUp) then
---         event.unregister(tes3.event.keyUp, onKeyUp)
---         event.register(tes3.event.keyUp, onKeyUp)
---     else
---         event.register(tes3.event.keyUp, onKeyUp)
---     end
--- end)
 
 local showMenu = "combatLog:showMenu"
 event.register(showMenu, function ()
-    log("showMenu event")
+    -- log("showMenu event")
     local menu = tes3ui.findMenu(combatLog)
     if menu then
         menu.width = 300
