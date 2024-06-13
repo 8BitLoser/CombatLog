@@ -3,11 +3,13 @@ local config = require("BeefStranger.CombatLog.config")
 event.register("initialized", function()
     print("[MWSE:Combat Log] initialized")
 end)
+
 local function log(string,...)
     local line = debug.getinfo(2, "l").currentline
     local message = string.format("[CombatLog|%s] - %s", line, string)
     mwse.log(message, ...)
 end
+
 ---From BeefLibrary
 ---@param menu tes3uiElement
 local function autoSize(menu)
@@ -15,8 +17,6 @@ local function autoSize(menu)
     menu.autoHeight = true
     menu.autoWidth = true
 end
-
-
 
 local combatLog = tes3ui.registerID("bsCombatLog")
 local cMenu---@type tes3uiElement 
@@ -34,7 +34,7 @@ local function combatlog()
         cMenu.positionX = -845
         cMenu.positionY = -135
         cMenu.alpha = config.alpha
-        cMenu:loadMenuPosition()
+        -- cMenu:loadMenuPosition()
 
     ---Have to do this or menu will not load visibly the first time
     if not cMenu.visible  then
@@ -53,6 +53,12 @@ local function combatlog()
 
     cMenu:updateLayout()
 end
+local function getMenu()
+    return tes3ui.findMenu(combatLog)
+end
+local function update()
+    cMenu:updateLayout()
+end
 
 local autoTimer---@type mwseTimer
 
@@ -60,13 +66,14 @@ local autoTimer---@type mwseTimer
 local function onAttackHitCallback(e)
     log("attackHitCallback")
     ---Could be using cMenu instead of finding menu but dont feel like updating it all
-    local menu = tes3ui.findMenu(combatLog)
+    ---WRONG ^^^ cMenu gets replaced with MenuMulti_bottom_row_right on reload, and breaks the mod/crashes
+    local menu = getMenu()
     local attacker = e.reference and e.reference.object and e.reference.object.name or "Unknown"
     local damage = e.mobile and e.mobile.actionData and e.mobile.actionData.physicalDamage or 0
     local isPlayer = e.reference == tes3.player
     local isTarget = e.targetReference ~= nil
 
-    if config.autoShow and not manual then
+    if config.autoShow and not manual and isTarget then
         log("autoShow")
         if cMenu then
             log("Making menu visible")
@@ -145,21 +152,25 @@ local function onAttackHitCallback(e)
             menu:updateLayout()
             scroll.widget:contentsChanged()
         end
-        -- menu:saveMenuPosition()
+        log("End of attackCallback")
+        menu:saveMenuPosition()
     end
 end
 event.register(tes3.event.attackHit, onAttackHitCallback)
 
----@param e keyUpEventData
-event.register("keyUp", function(e)
+
+--[[ event.register("keyUp", function(e)
     if not tes3.onMainMenu() and e.keyCode == config.keycode.keyCode and tes3.isCharGenFinished() then
         if tes3ui.menuMode() then return end
 
         if config.autoShow and cMenu then
             if manual then
+                log("manual true | vis %s", cMenu.visible)
                 manual = false
                 tes3.messageBox("CombatLog Manual Override %s", manual or "Disabled")
+                cMenu.visible = false
             else
+                log("manual nil or false | vis %s", cMenu.visible)
                 manual = true
                 tes3.messageBox("CombatLog Manual Override %s", manual and "Enabled")
                 cMenu.visible = true
@@ -167,15 +178,83 @@ event.register("keyUp", function(e)
         else
             if cMenu then
                 ---Toggle visible
+                log("cMenu found toggle visiblity|current %s", cMenu.visible)
                 cMenu.visible = not cMenu.visible
                 ---Update just incase, probably not needed
                 cMenu:updateLayout()
             else
                 combatlog()
+                if config.autoShow then
+                    cMenu.visible = false
+                    cMenu:updateLayout()
+                end
             end
         end
+
+        if tes3.worldController.inputController:isAltDown() then
+            tes3.createReference({ --Spawn a skeleton on the player
+            object = "skeleton",
+            position = tes3.player.position,
+            orientation = tes3vector3.new(0, 0, 0.67),
+            cell = tes3.player.cell
+        })
+        end
     end
-end)
+end) ]]
+
+---@param e keyUpEventData
+local function onKeyUp(e)
+    if not tes3.onMainMenu() and e.keyCode == config.keycode.keyCode and tes3.isCharGenFinished() then
+        if tes3ui.menuMode() then return end
+        log("getMenu %s | cMenu %s", getMenu(), cMenu)
+        local menu = getMenu()
+
+        if config.autoShow and menu then
+            if manual then
+                log("manual true | vis %s", menu.visible)
+                manual = false
+                tes3.messageBox("CombatLog Manual Override %s", manual or "Disabled")
+                menu.visible = false
+            else
+                log("manual nil or false | vis %s", menu.visible)
+                manual = true
+                tes3.messageBox("CombatLog Manual Override %s", manual and "Enabled")
+                menu.visible = true
+            end
+        else
+            if menu then
+                ---Toggle visible
+                log("menu found toggle visiblity|current %s", menu.visible)
+                menu.visible = not menu.visible
+                ---Update just incase, probably not needed
+                menu:updateLayout()
+            else
+                combatlog()
+            end
+        end
+
+        if tes3.worldController.inputController:isAltDown() then
+            tes3.createReference({ --Spawn a skeleton on the player
+            object = "skeleton",
+            position = tes3.player.position,
+            orientation = tes3vector3.new(0, 0, 0.67),
+            cell = tes3.player.cell
+        })
+        end
+    end
+end
+
+event.register(tes3.event.keyUp, onKeyUp)
+
+-- event.register(tes3.event.loaded, function (e)
+--     log("event loaded %s", event.isRegistered(tes3.event.keyUp, onKeyUp))
+--     if event.isRegistered(tes3.event.keyUp, onKeyUp) then
+--         event.unregister(tes3.event.keyUp, onKeyUp)
+--         event.register(tes3.event.keyUp, onKeyUp)
+--     else
+--         event.register(tes3.event.keyUp, onKeyUp)
+--     end
+-- end)
 
 local showMenu = "combatLog:showMenu"
 event.register(showMenu, function ()
