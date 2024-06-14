@@ -2,11 +2,11 @@ local configPath = "CombatLog"
 
 ---@class bsCombatLog<K, V>: { [K]: V }
 local defaults = {
-    showPlayerName = false,
-    alpha = 1,
-    autoShow = true,
-    autoDuration = 5,
-    keycode = {              --Keycode to trigger menu
+    showPlayerName = false, --Log shows Player Name if true else just "You"
+    alpha = 1,              --Transparency amount
+    autoShow = true,        --If the menu will auto show on hit/attack
+    autoDuration = 5,       --How long autoShow lasts if enabled
+    keycode = {             --Keycode to trigger menu
         keyCode = tes3.scanCode.x,
         isShiftDown = false,
         isAltDown = false,

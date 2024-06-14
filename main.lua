@@ -19,16 +19,16 @@ local function autoSize(menu)
 end
 
 local combatLog = tes3ui.registerID("bsCombatLog")
-local cMenu---@type tes3uiElement 
-local cheader ---@type tes3uiElement --The cheese
-local clog---@type tes3uiElement --The shoes
-local scroll---@type tes3uiElement
-local manual
-
+local cMenu     ---@type tes3uiElement The top level menu
+local cheader   ---@type tes3uiElement The cheese
+local scroll    ---@type tes3uiElement The ScrollPane
+local clog      ---@type tes3uiElement The Block inside of scroll
+local manual    ---@type boolean ManualOverride
+---Creation of the log
 local function combatlog()
     -- log("combatLog started")
     cMenu = tes3ui.createMenu{id = combatLog, dragFrame = true, fixedFrame = false}
-        cMenu.text = "Combat -- log"
+        cMenu.text = "Combat log"
         cMenu.width = 300
         cMenu.height = 200
         cMenu.positionX = -845
@@ -53,10 +53,28 @@ local function combatlog()
 
     cMenu:updateLayout()
 end
+---finMenu Helper because cMenu breaks on load
 local function getMenu()
     return tes3ui.findMenu(combatLog)
 end
 
+---Updates menu and ScrollBar
+local function updateList()
+    local menu = getMenu()
+    menu:updateLayout()                                    ---Update Layout
+    scroll.widget.positionY = scroll.widget.positionY + 25 ---Scroll down 25
+    scroll.widget:contentsChanged()                        ---Update actual scrollPane
+end
+
+-------------Get hitChance to add to log--------------
+local hitChance = 0
+--- @param e calcHitChanceEventData
+local function hitChanceCalc(e)
+    hitChance = e.hitChance
+end
+event.register(tes3.event.calcHitChance, hitChanceCalc)
+------------------------------------------------------
+---The Timer for autoShow
 local autoTimer---@type mwseTimer
 
 --- @param e attackHitEventData
@@ -64,13 +82,17 @@ local function onAttackHitCallback(e)
     -- log("attackHitCallback")
     ---Could be using cMenu instead of finding menu but dont feel like updating it all
     ---WRONG ^^^ cMenu gets replaced with MenuMulti_bottom_row_right on reload, and breaks the mod/crashes
-    local menu = getMenu()
-    local attacker = e.reference and e.reference.object and e.reference.object.name or "Unknown"
-    local damage = e.mobile and e.mobile.actionData and e.mobile.actionData.physicalDamage or 0
-    local isPlayer = e.reference == tes3.player
-    local isTarget = e.targetReference ~= nil
 
-    if config.autoShow and not manual and isTarget then
+    local menu = getMenu()                                                                       --The CombatLog Menu
+    local attacker = e.reference and e.reference.object and e.reference.object.name or "Unknown" --Name of attacker
+    local damage = e.mobile and e.mobile.actionData and e.mobile.actionData.physicalDamage or 0  --Damage dealt to target
+    local playerAttack = e.reference == tes3.player                                              --Checks if attack was from the player
+    local playerIsTarget = e.targetReference == tes3.player
+    local validTarget = e.targetReference ~= nil                                                 --Checks for Valid Target
+    local target = e.targetReference and e.targetReference.object.name or "Unknown"              --Who got attacked when blocking
+    local blocked = e.targetMobile and e.targetMobile.actionData.blockingState ~= 0              --Checks if attack was blocked
+
+    if config.autoShow and not manual and validTarget then
         -- log("autoShow")
         if menu then
             -- log("Making menu visible")
@@ -89,7 +111,7 @@ local function onAttackHitCallback(e)
                 duration = config.autoDuration,
                 callback = function(e)
                     -- log("timer end")
-                    -- local menu = tes3ui.findMenu(combatLog)
+                    -- local menu = getMenu()
                     if menu and menu.visible and not manual then
                         -- log("hiding menu")
                         menu.visible = false
@@ -100,54 +122,62 @@ local function onAttackHitCallback(e)
     end
 
     if menu then
-        -- log("menu found starting update")
-        if damage <= 0 and isTarget then
-            -- log("Missed:showing miss text")
-            local missedText = ("%s Missed"):format(attacker)
+        if damage <= 0 and validTarget then
+            ---If Enemy misses
+            local missedText = ("%s Missed (%d%%)"):format(attacker, hitChance)
 
-            if isPlayer then
-                missedText = string.format("%s Missed", not config.showPlayerName and "You" or attacker)
+            ---If Player misses
+            if playerAttack then
+                missedText = string.format("%s Missed (%d%%)", not config.showPlayerName and "You" or attacker, hitChance)
             end
             -- logmsg("%s Missed", e.reference.object.name) 
             local missedlabel = clog:createLabel { text = missedText }
 
-            if isPlayer then
-                missedlabel.color = { 0.839, 0.839, 0.839 }
+            if playerAttack then
+                missedlabel.color = { 0.839, 0.839, 0.839 } ---Player Color
             else
-                missedlabel.color = { 0.38, 0.38, 0.38 }
+                missedlabel.color = { 0.38, 0.38, 0.38 }    ---Enemy Color
             end
             ---Update scrollbar and move to the bottom
             -- log("Missed:Updating")
-            menu:updateLayout()
-            scroll.widget.positionY = scroll.widget.positionY + 25
-            scroll.widget:contentsChanged()
+            updateList()
 
-        elseif isTarget then
-            local hitText = string.format("%s Hit for %.2f", attacker, damage)
-            if isPlayer then
-                hitText = string.format("%s Hit for %.2f", not config.showPlayerName and "You" or attacker, damage)
+        elseif validTarget and not blocked then
+            local hitText = string.format("%s Hit for %.2f (%d%%)", attacker, damage, hitChance)
+            if playerAttack then
+                ---If showPlayerName disabled shows "You" else the name of the attacker(Characters name)
+                hitText = string.format("%s Hit for %.2f (%d%%)", not config.showPlayerName and "You" or attacker, damage, hitChance)
             end
 
             local hitlabel = clog:createLabel { text = hitText }
             ---Change Color depending on who's attacking
-            if isPlayer then
-                hitlabel.color = { 0.38, 0.941, 0.525 }
-            elseif not isPlayer then
-                hitlabel.color = { 0.941, 0.38, 0.38 }
+            if playerAttack then
+                hitlabel.color = { 0.38, 0.941, 0.525 } ---Player Color
+            elseif not playerAttack then
+                hitlabel.color = { 0.941, 0.38, 0.38 }  ---Enemy Color
             end
-            -- log("Hit:Updating")
-            -- log("Menu - %s", menu)
-            menu:updateLayout()
-            scroll.widget.positionY = scroll.widget.positionY + 25
-            scroll.widget:contentsChanged()
-            -- log("Hit:Update Finished")
+            -- log("Hit:Updating"); log("Menu - %s", menu)
+            updateList()
+
+        elseif validTarget and blocked then
+            local blockText = ("%s Blocked!"):format(target)
+
+            if playerIsTarget then
+                -- log("player is target")
+                blockText = ("%s Blocked!"):format(not config.showPlayerName and "You" or target)
+            end
+
+            local blockLabel = clog:createLabel { text = blockText }
+            -- log(blockText)
+            updateList()
         end
+
         ---Only save 100 messages
         if #clog.children >= 100 then
-            -- log("-- log Full")
-            clog.children[1]:destroy()
-            menu:updateLayout()
-            scroll.widget:contentsChanged()
+            -- log("log Full")
+            clog.children[1]:destroy()      ---Destroy First message
+            menu:updateLayout()             ---Update
+            scroll.widget:contentsChanged() ---Update ScrollPane
         end
         -- log("End of attackCallback")
         menu:saveMenuPosition()
@@ -163,6 +193,7 @@ local function onKeyUp(e)
         local menu = getMenu()
 
         if config.autoShow and menu then
+            ---If manual mode is true disable it and hide menu on KeyPress
             if manual then
                 -- log("manual true | vis %s", menu.visible)
                 manual = false
@@ -182,18 +213,18 @@ local function onKeyUp(e)
                 ---Update just incase, probably not needed
                 menu:updateLayout()
             else
-                combatlog()
+                combatlog() --Create the log if its not done
             end
         end
 
-        if tes3.worldController.inputController:isAltDown() then
-            tes3.createReference({ --Spawn a skeleton on the player
-            object = "skeleton",
-            position = tes3.player.position,
-            orientation = tes3vector3.new(0, 0, 0.67),
-            cell = tes3.player.cell
-        })
-        end
+        -- if tes3.worldController.inputController:isAltDown() then
+        --     tes3.createReference({ --Spawn a skeleton on the player
+        --     object = "skeleton",
+        --     position = tes3.player.position,
+        --     orientation = tes3vector3.new(0, 0, 0.67),
+        --     cell = tes3.player.cell
+        -- })
+        -- end
     end
 end
 event.register(tes3.event.keyUp, onKeyUp)
