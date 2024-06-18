@@ -1,7 +1,7 @@
 local config = require("BeefStranger.CombatLog.config")
 
 event.register("initialized", function()
-    print("[MWSE:Combat -- log] initialized")
+    print("[MWSE:Combat log] initialized")
 end)
 
 local function log(string,...)
@@ -74,6 +74,7 @@ local function hitChanceCalc(e)
 end
 event.register(tes3.event.calcHitChance, hitChanceCalc)
 ------------------------------------------------------
+
 ---The Timer for autoShow
 local autoTimer---@type mwseTimer
 
@@ -83,24 +84,22 @@ local function onAttackHitCallback(e)
     ---Could be using cMenu instead of finding menu but dont feel like updating it all
     ---WRONG ^^^ cMenu gets replaced with MenuMulti_bottom_row_right on reload, and breaks the mod/crashes
 
-    local menu = getMenu()                                                                       --The CombatLog Menu
+    local menu = getMenu() or (config.autoShow and combatlog() and getMenu())                    --The CombatLog Menu or create and then get it
     local attacker = e.reference and e.reference.object and e.reference.object.name or "Unknown" --Name of attacker
     local damage = e.mobile and e.mobile.actionData and e.mobile.actionData.physicalDamage or 0  --Damage dealt to target
     local playerAttack = e.reference == tes3.player                                              --Checks if attack was from the player
-    local playerIsTarget = e.targetReference == tes3.player
+    local playerIsTarget = e.targetReference == tes3.player                                      --Checks if player is the target
     local validTarget = e.targetReference ~= nil                                                 --Checks for Valid Target
     local target = e.targetReference and e.targetReference.object.name or "Unknown"              --Who got attacked when blocking
     local blocked = e.targetMobile and e.targetMobile.actionData.blockingState ~= 0              --Checks if attack was blocked
+    if not menu then log("%s not found", combatLog) return end
+
+    local you = not config.showPlayerName and "You" or attacker --Is "You" if config.showPlayerName = false, or attacker if true
 
     if config.autoShow and not manual and validTarget then
         -- log("autoShow")
-        if menu then
-            -- log("Making menu visible")
-            menu.visible = true
-        else
-            -- log("creating -- log")
-            combatlog()
-        end
+        -- log("Making menu visible")
+        menu.visible = true
 
         if autoTimer and autoTimer.state ~= 2 then
             -- log("resetting timer")
@@ -112,7 +111,7 @@ local function onAttackHitCallback(e)
                 callback = function(e)
                     -- log("timer end")
                     -- local menu = getMenu()
-                    if menu and menu.visible and not manual then
+                    if menu.visible and not manual then
                         -- log("hiding menu")
                         menu.visible = false
                     end
@@ -121,67 +120,41 @@ local function onAttackHitCallback(e)
         end
     end
 
-    if menu then
-        if damage <= 0 and validTarget then
-            ---If Enemy misses
-            local missedText = ("%s Missed (%d%%)"):format(attacker, hitChance)
+    if damage <= 0 and validTarget then --If Attacker Missed
+        local missedText = ("%s Missed (%d%%)"):format(playerAttack and you or attacker, hitChance) --"You" or attacker name
 
-            ---If Player misses
-            if playerAttack then
-                missedText = string.format("%s Missed (%d%%)", not config.showPlayerName and "You" or attacker, hitChance)
-            end
-            -- logmsg("%s Missed", e.reference.object.name) 
-            local missedlabel = clog:createLabel { text = missedText }
+        local missedlabel = clog:createLabel { text = missedText }
+        missedlabel.color = playerAttack and { 0.839, 0.839, 0.839 } or { 0.38, 0.38, 0.38 }
+        -- logmsg("%s Missed", e.reference.object.name)
+        updateList()
+    elseif validTarget and not blocked then
+        local hitText = string.format("%s Hit for %.2f (%d%%)", playerAttack and you or attacker , damage, hitChance)
 
-            if playerAttack then
-                missedlabel.color = { 0.839, 0.839, 0.839 } ---Player Color
-            else
-                missedlabel.color = { 0.38, 0.38, 0.38 }    ---Enemy Color
-            end
-            ---Update scrollbar and move to the bottom
-            -- log("Missed:Updating")
-            updateList()
+        local hitlabel = clog:createLabel { text = hitText }
+        hitlabel.color = playerAttack and { 0.38, 0.941, 0.525 } or { 0.941, 0.38, 0.38 } ---Change Color depending on who's attacking
+        -- log("Hit:Updating"); log("Menu - %s", menu)
+        updateList()
+    elseif validTarget and blocked then
+        local blockText = ("%s Blocked!"):format(playerIsTarget and you or target)
 
-        elseif validTarget and not blocked then
-            local hitText = string.format("%s Hit for %.2f (%d%%)", attacker, damage, hitChance)
-            if playerAttack then
-                ---If showPlayerName disabled shows "You" else the name of the attacker(Characters name)
-                hitText = string.format("%s Hit for %.2f (%d%%)", not config.showPlayerName and "You" or attacker, damage, hitChance)
-            end
-
-            local hitlabel = clog:createLabel { text = hitText }
-            ---Change Color depending on who's attacking
-            if playerAttack then
-                hitlabel.color = { 0.38, 0.941, 0.525 } ---Player Color
-            elseif not playerAttack then
-                hitlabel.color = { 0.941, 0.38, 0.38 }  ---Enemy Color
-            end
-            -- log("Hit:Updating"); log("Menu - %s", menu)
-            updateList()
-
-        elseif validTarget and blocked then
-            local blockText = ("%s Blocked!"):format(target)
-
-            if playerIsTarget then
-                -- log("player is target")
-                blockText = ("%s Blocked!"):format(not config.showPlayerName and "You" or target)
-            end
-
-            local blockLabel = clog:createLabel { text = blockText }
-            -- log(blockText)
-            updateList()
-        end
-
-        ---Only save 100 messages
-        if #clog.children >= 100 then
-            -- log("log Full")
-            clog.children[1]:destroy()      ---Destroy First message
-            menu:updateLayout()             ---Update
-            scroll.widget:contentsChanged() ---Update ScrollPane
-        end
-        -- log("End of attackCallback")
-        menu:saveMenuPosition()
+        local blockLabel = clog:createLabel { text = blockText }
+        blockLabel.color = {0.792,0.647,0.376}--Default Text color, manually put in to change later if I decide to
+        -- log(blockText) 
+        updateList()
     end
+
+    ---Only save 100 messages
+    if #clog.children > 100 then
+        -- log("log Full")
+        for i = 1, #clog.children - 100 do
+            clog.children[i]:destroy()          ---Destroy First message
+        end
+
+        menu:updateLayout()                 ---Update
+        scroll.widget:contentsChanged()     ---Update ScrollPane
+    end
+    -- log("End of attackCallback")
+    menu:saveMenuPosition()
 end
 event.register(tes3.event.attackHit, onAttackHitCallback)
 
@@ -216,15 +189,6 @@ local function onKeyUp(e)
                 combatlog() --Create the log if its not done
             end
         end
-
-        -- if tes3.worldController.inputController:isAltDown() then
-        --     tes3.createReference({ --Spawn a skeleton on the player
-        --     object = "skeleton",
-        --     position = tes3.player.position,
-        --     orientation = tes3vector3.new(0, 0, 0.67),
-        --     cell = tes3.player.cell
-        -- })
-        -- end
     end
 end
 event.register(tes3.event.keyUp, onKeyUp)
