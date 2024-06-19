@@ -1,22 +1,13 @@
 local config = require("BeefStranger.CombatLog.config")
+local bs = require("BeefStranger.CombatLog.common")
+local rgb, log = bs.rgb, bs.log
+
+local cl = {}
+
 
 event.register("initialized", function()
     print("[MWSE:Combat log] initialized")
 end)
-
-local function log(string,...)
-    local line = debug.getinfo(2, "l").currentline
-    local message = string.format("[CombatLog|%s] - %s", line, string)
-    mwse.log(message, ...)
-end
-
----From BeefLibrary
----@param menu tes3uiElement
-local function autoSize(menu)
-    -- log("AutoSize")
-    menu.autoHeight = true
-    menu.autoWidth = true
-end
 
 local combatLog = tes3ui.registerID("bsCombatLog")
 local cMenu     ---@type tes3uiElement The top level menu
@@ -47,12 +38,13 @@ local function combatlog()
 
     scroll = cMenu:createVerticalScrollPane{id = "scroll"}
 
-    clog = scroll:createBlock{id = "CLOG"}
-        autoSize(clog)
+    clog = scroll:createBlock{id = "clog"}
+        bs.autoSize(clog)
         clog.flowDirection = tes3.flowDirection.topToBottom
 
     cMenu:updateLayout()
 end
+
 ---finMenu Helper because cMenu breaks on load
 local function getMenu()
     return tes3ui.findMenu(combatLog)
@@ -73,10 +65,90 @@ local function hitChanceCalc(e)
     hitChance = e.hitChance
 end
 event.register(tes3.event.calcHitChance, hitChanceCalc)
-------------------------------------------------------
 
+--------------AutoTimer--------------
 ---The Timer for autoShow
 local autoTimer---@type mwseTimer
+
+function cl.autoShow()
+    local menu = getMenu() or (combatlog() and getMenu())
+    debug.log(menu)
+
+    if menu then
+        menu.visible = true
+
+        if autoTimer and autoTimer.state ~= 2 then
+            -- log("resetting timer")
+            autoTimer:reset()
+        else
+            autoTimer = timer.start {
+                duration = config.autoDuration,
+                callback = function(e)
+                    log("timer end")
+                    -- local menu = getMenu()
+                    if menu.visible then
+                        log("hiding menu")
+                        menu.visible = false
+                    end
+                end
+            }
+        end
+    else
+        log("Combat Log not Found")
+    end
+end
+------------------------------------------------------
+
+------------------------------------------------------
+local magicDamage = 0
+local damageTimer ---@type mwseTimer|nil
+--- @param e damagedEventData
+local function damagedCallback(e)
+    if e.source == tes3.damageSource.magic then
+        magicDamage = magicDamage + math.abs(e.damage)
+        local menu = getMenu() or (combatlog() and getMenu())
+        local attacker = e.attacker.object.name or "Unknown"        --Name of Attacker
+        local playerIsAttacker = e.attacker == tes3.mobilePlayer    --If player is Attacking
+        local playerIsTarget = e.mobile == tes3.mobilePlayer        --If player is the Target
+        local eName = e.magicEffect.object.name                     --Name of effect
+        local you = not config.showPlayerName and "You" or attacker --Set you to various options
+
+        if damageTimer and damageTimer.state ~= 2 then              --Reset timer if effect is still active
+            damageTimer:reset()
+        else
+            damageTimer = timer.start({
+                duration = 0.10,
+                callback = function()
+                    if menu and magicDamage > 0 and (playerIsAttacker or playerIsTarget) then
+                        if config.autoShow and not manual then
+                            cl.autoShow()
+                        end
+                        local hitText = string.format(
+                            "%s Dealt %.2f %s",
+                            (playerIsAttacker and you or attacker),
+                            math.ceil(magicDamage),
+                            (config.showEffectName and (string.find(eName:lower(), "damage") and eName or eName .. " Damage")) or
+                            "Damage"
+                        )
+
+                        local magicHit = clog:createLabel { text = hitText }
+                        magicHit.color = playerIsAttacker and rgb.bsPrettyBlue or rgb.bsNiceRed
+
+                        if config.autoShow then
+                            menu.visible = true
+                        end
+
+                        updateList()
+                    end
+                    magicDamage = 0
+                    damageTimer = nil
+                end
+            })
+        end
+    end
+end
+event.register(tes3.event.damaged, damagedCallback)
+
 
 --- @param e attackHitEventData
 local function onAttackHitCallback(e)
@@ -97,48 +169,51 @@ local function onAttackHitCallback(e)
     local you = not config.showPlayerName and "You" or attacker --Is "You" if config.showPlayerName = false, or attacker if true
 
     if config.autoShow and not manual and validTarget then
-        -- log("autoShow")
-        -- log("Making menu visible")
-        menu.visible = true
+        cl.autoShow()
+        -- -- log("autoShow")
+        -- -- log("Making menu visible")
+        -- menu.visible = true
 
-        if autoTimer and autoTimer.state ~= 2 then
-            -- log("resetting timer")
-            autoTimer:reset()
-        else
-            -- log("timer start %ss", config.autoDuration)
-            autoTimer = timer.start {
-                duration = config.autoDuration,
-                callback = function(e)
-                    -- log("timer end")
-                    -- local menu = getMenu()
-                    if menu.visible and not manual then
-                        -- log("hiding menu")
-                        menu.visible = false
-                    end
-                end
-            }
-        end
+        -- if autoTimer and autoTimer.state ~= 2 then
+        --     -- log("resetting timer")
+        --     autoTimer:reset()
+        -- else
+        --     -- log("timer start %ss", config.autoDuration)
+        --     autoTimer = timer.start {
+        --         duration = config.autoDuration,
+        --         callback = function(e)
+        --             -- log("timer end")
+        --             -- local menu = getMenu()
+        --             if menu.visible and not manual then
+        --                 -- log("hiding menu")
+        --                 menu.visible = false
+        --             end
+        --         end
+        --     }
+        -- end
     end
-
-    if damage <= 0 and validTarget then --If Attacker Missed
+    --If Attacker Missed
+    if damage <= 0 and validTarget then 
         local missedText = ("%s Missed (%d%%)"):format(playerAttack and you or attacker, hitChance) --"You" or attacker name
 
         local missedlabel = clog:createLabel { text = missedText }
-        missedlabel.color = playerAttack and { 0.839, 0.839, 0.839 } or { 0.38, 0.38, 0.38 }
+        missedlabel.color = playerAttack and rgb.bsLightGrey or rgb.focusColor
         -- logmsg("%s Missed", e.reference.object.name)
         updateList()
+    --If Attacker Hit
     elseif validTarget and not blocked then
         local hitText = string.format("%s Hit for %.2f (%d%%)", playerAttack and you or attacker , damage, hitChance)
 
         local hitlabel = clog:createLabel { text = hitText }
-        hitlabel.color = playerAttack and { 0.38, 0.941, 0.525 } or { 0.941, 0.38, 0.38 } ---Change Color depending on who's attacking
+        hitlabel.color = playerAttack and rgb.bsPrettyGreen or rgb.bsNiceRed ---Change Color depending on who's attacking
         -- log("Hit:Updating"); log("Menu - %s", menu)
         updateList()
+    --If Target Blocked
     elseif validTarget and blocked then
         local blockText = ("%s Blocked!"):format(playerIsTarget and you or target)
 
         local blockLabel = clog:createLabel { text = blockText }
-        blockLabel.color = {0.792,0.647,0.376}--Default Text color, manually put in to change later if I decide to
+        blockLabel.color = rgb.normalColor --Default Text color, manually put in to change later if I decide to
         -- log(blockText) 
         updateList()
     end
@@ -192,6 +267,13 @@ local function onKeyUp(e)
     end
 end
 event.register(tes3.event.keyUp, onKeyUp)
+
+event.register("loaded", function (e)
+    combatlog()
+    local menu = getMenu()
+    menu.visible = false
+    debug.log(menu)
+end)
 
 local showMenu = "combatLog:showMenu"
 event.register(showMenu, function ()

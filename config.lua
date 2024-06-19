@@ -6,6 +6,7 @@ local defaults = {
     alpha = 1,              --Transparency amount
     autoShow = true,        --If the menu will auto show on hit/attack
     autoDuration = 5,       --How long autoShow lasts if enabled
+    showEffectName = false, --Show effect name in log
     keycode = {             --Keycode to trigger menu
         keyCode = tes3.scanCode.x,
         isShiftDown = false,
@@ -67,7 +68,8 @@ local function registerModConfig()
     local settings = template:createPage({ label = "Settings" })
 
         local toggle = settings:createCategory{paddingBottom = 10,}
-            yesNoB(toggle, "Use Players Name in Combat Log?", "showPlayerName", config)
+            yesNoB(toggle, "Use Players Name in Combat Log", "showPlayerName", config)
+            yesNoB(toggle, "Show Effect Name in Combat Log", "showEffectName", config)
             yesNoB(toggle, "Enable Auto Show Mode", "autoShow", config)
 
             toggle:createSlider({
